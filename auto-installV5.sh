@@ -155,9 +155,9 @@ elif [ "$MACHINE" == "i386" ] || [ "$MACHINE" == "i686" ]; then
 	ARCH="x86"
 fi
 
-cyanMess ""
+cyanMess " "
 greenMess "Emodyz verify your system.. Please be patient"
-cyanMess ""
+cyanMess " "
 
 if [ -f /etc/debian_version ]; then
 	INSTALLER="apt-get"
@@ -208,13 +208,29 @@ cyanMess " "
 okAndSleep "Update the system packages to the latest version ? Its required, as otherwise dependencies might break !"
 
 OPTIONS=("Yes" "Quit")
-select UPDATE_UPGRADE_SYSTEM in "${OPTIONS[@]}"; do
+select UPDATEORUPGRADE_SYSTEM in "${OPTIONS[@]}"; do
 	case "$REPLY" in
 	1) break ;;
 	2) errorAndQuit ;;
 	*) errorAndContinue ;;
 	esac
 done
+
+if [ "$UPDATEORUPGRADE_SYSTEM" == "Yes" ]; then
+	cyanMess " "
+	redMess "Please wait... Update is currently running"
+	cyanMess " "
+	$INSTALLER -y upgrade
+	$INSTALLER -y dist-upgrade
+	checkInstall lsb-release
+	checkInstall curl
+	cyanMess " "
+else
+	errorAndExit "Update is needed before continue"
+fi
+
+
+============================= V1 BELOW =============================
 
 function jumpto {
     	label=$1
