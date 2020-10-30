@@ -1,16 +1,220 @@
 #!/bin/bash
 
-lang=$(locale | grep LANG= | cut -d= -f2 | cut -d_ -f1)
+# Debug MODE
+DEBUG="off"
 
-os=''
-ost=''
-vers=''
-auth=''
+# 	Author: 	Manet Jérémy <support@flashmodz.fr>
+#				Emodyz Team
+#
+#	This file is part of Emodyz / Ezgames Team
+#
+#	Emodyz/EzGames release a free software: You can distribute it and/or modify
+#	it under the terms of the GNU General Public License as published by
+#	the Free Software Foundation, either version 3 of the license, or
+#	(At your option) any later version
+#
+#    Emodyz/EzGames distribute in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with Emodyz/EzGames.  If not, see <http://www.gnu.org/licenses/>.
+#
+# Function (DO NOT MODIFY)
 
-## GITHUB INFO
-guser='MrDarkSkil'
-grepo='Launcher_Multigaming'
-gbranch='bash-unix'
+if [ "$DEBUG" == "on" ] || [ "$1" == "--debug" ]; then
+	set -x
+fi
+
+greenMess() {
+	echo -e "\\033[32;1m${@}\033[0m"
+}
+
+redMess() {
+	echo -e "\\033[31;1m${@}\033[0m"
+}
+
+cyanMess() {
+	echo -e "\\033[36;1m${@}\033[0m"
+}
+
+greenoMess() {
+	echo -en "\\033[32;1m${@}\033[0m"
+}
+
+redoMess() {
+	echo -en "\\033[31;1m${@}\033[0m"
+}
+
+cyanoMess() {
+	echo -en "\\033[36;1m${@}\033[0m"
+}
+
+removeIfExists() {
+	if [ -n "$1" ] && [ -f "$1" ]; then
+		rm -f "$1"
+	fi
+}
+
+errorAndExit() {
+	cyanMessage " "
+	redMessage "${@}"
+	cyanMessage " "
+	exit 1
+}
+
+errorAndContinue() {
+	redMessage "Invalid option."
+}
+
+runSpinner() {
+	SPINNER=("-" "\\" "|" "/")
+
+	for SEQUENCE in $(seq 1 "$1"); do
+		for I in "${SPINNER[@]}"; do
+			echo -ne "\b$I"
+			sleep 0.1
+		done
+	done
+}
+
+okAndSleep() {
+	greenMessage "$1"
+	sleep 1
+}
+
+checkInstall() {
+	if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ]; then
+		if [ -z "$(dpkg-query -s "$1" 2>/dev/null)" ]; then
+			cyanMessage " "
+			okAndSleep "Installing package $1"
+			$INSTALLER -y install "$1"
+		fi
+	elif [ "$OS" == "centos" ]; then
+		if [ -z "$(rpm -qa "$1")" ]; then
+			cyanMessage " "
+			okAndSleep "Installing package $1"
+			$INSTALLER -y install "$1"
+		fi
+	elif [ "$OS" == "slackware" ]; then
+		if [ -z "$(slackpkg search "$1" 2>/dev/null)" ]; then
+			cyanMessage " "
+			okAndSleep "Installing package $1"
+			$INSTALLER install "$1"
+		fi
+
+	fi
+
+	if [ "$?" -ne 0 ]; then
+		errorAndExit "\nPlease check Output!\nInstallation abort!\n"
+	fi
+}
+
+checkUnInstall() {
+	if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ]; then
+		if [ -z "$(dpkg-query -s "$1" 2>/dev/null)" ]; then
+			cyanMessage " "
+			okAndSleep "Uninstalling package $1"
+			$INSTALLER -y remove "$1"
+		fi
+	elif [ "$OS" == "centos" ]; then
+		if [ -z "$(rpm -qa "$1")" ]; then
+			cyanMessage " "
+			okAndSleep "Uninstalling package $1"
+			$INSTALLER -y remove "$1"
+		fi
+	elif [ "$OS" == "slackware" ]; then
+		if [ -z "$(slackpkg search "$1")" ]; then
+			cyanMessage " "
+			okAndSleep "Uninstalling package $1"
+			$INSTALLER remove "$1"
+		fi
+	fi
+}
+
+importKey() {
+	if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ]; then
+		apt-key adv --recv-keys --keyserver "$1" "$2"
+	elif [ "$OS" == "centos" ]; then
+		rpm --import "$1"
+	elif [ "$OS" == "slackware" ]; then
+		slackpkg update gpg
+	fi
+}
+
+# VARS
+
+INSTALLERVERSION="2.0"
+IP=$(hostname -I | awk '{print $1}')
+PKILL=$(which pkill)
+MACHINE=$(uname -m)
+if [ "$MACHINE" == "x86_64" ]; then
+	ARCH="amd64"
+elif [ "$MACHINE" == "i386" ] || [ "$MACHINE" == "i686" ]; then
+	ARCH="x86"
+fi
+
+cyanMess ""
+greenMess "Emodyz verify your system.. Please be patient"
+cyanMess ""
+
+if [ -f /etc/debian_version ]; then
+	INSTALLER="apt-get"
+	OS="debian"
+	OSVERSION=$(sed 's/\..*//' /etc/debian_version)
+	$INSTALLER -y update
+	if [ -z "$(which wget)" ]; then
+		checkInstall wget
+	fi
+	if [ -z "$(which dialog)" ]; then
+		checkInstall dialog
+	fi
+	if [ -z "$(which logger)" ]; then
+		apt-get --reinstall install bsdutils
+	fi
+	if [ -z "$(which apt-utils)" ]; then
+		checkInstall apt-utils
+	fi
+else
+	SPINNER 10
+	errorAndQuit "Your version is not currently supported by EMODYZ, please read the wiki or buy an hosting at https://ezgames.fr"
+fi
+
+if [ -z "$IP" ] || [ "$IP" == "0" ] || [ "$IP" == "localhost" ]; then
+	IP=$(ip route get 8.8.8.8 | awk '{print $7; exit}')
+fi
+
+cyanMess
+cyanMess "Check for the latest Auto-installer version"
+LATEST_V=$(wget -q --timeout=60 -O - https://api.github.com/repos/emodyz/bashv5/releases/latest | grep -Po '(?<="tag_name": ")([0-9]\.[0-9]+)')
+
+if [ "$(printf "${LATEST_V}\n${INSTALLERVERSION}" | sort -V | tail -n 1)" != "$INSTALLERVERSION" ]; then
+	errorAndExit "You are using the old version ${INSTALLERVERSION}. Please upgrade to version ${LATEST_V} and retry."
+else
+	okAndSleep "You are using the up to date version ${INSTALLERVERSION}"
+fi
+
+if [ "$(id -u)" != "0" ]; then
+	cyanMess "Upgrade to root required"
+	su -
+fi
+
+if [ "$(id -u)" != "0" ]; then
+	errorAndExit "You are not still in root, ABORT NOW"
+fi
+
+cyanMess " "
+okAndSleep "Update the system packages to the latest version ? Its required, as otherwise dependencies might break !"
+
+OPTIONS=("Yes" "Quit")
+select UPDATE_UPGRADE_SYSTEM in "${OPTIONS[@]}"; do
+	case "$REPLY" in
+	1) break ;;
+	2) errorAndQuit ;;
+	*) errorAndContinue ;;
+	esac
+done
 
 function jumpto {
     	label=$1
@@ -106,7 +310,6 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 		auth=1
 		if [[ '$(version '$outh')' <  '$(version '$(lsb_release --release | awk '{ print $2 }')')' ]]; then
 			vers=$(lsb_release --release | awk '{ print $2 }')
-			lang=$(export locale | grep LANG= | cut -d= -f2 | cut -d_ -f1)
                         echo -e '\n \e[92mYour OS Has Authorized to proceed'
                         auth=1
                         echo -e '\n ************************* \n Informations Trouvée : \n *************************'
@@ -170,9 +373,6 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 				
 				st19x:
 				echo -e '\n \e[39m'$checkdep
-				apt install sudo
-				apt install dirmngr
-				apt-get install debian-keyring
 				sudo apt update && sudo apt upgrade -y
 				echo -e '\n \e[91m'$checkdist
 				sudo apt update && sudo apt dist-upgrade -y
@@ -181,11 +381,8 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 				ls
 				wget https://dev.mysql.com/get/mysql-apt-config_0.8.11-1_all.deb
 				echo -e '\n \e[91m'$donotforgetv
-				gpg --keyserver pgp.mit.edu --recv-keys 5072E1F5
-				gpg --armor --export 5072E1F5 | apt-key add -
-				sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 5072E1F5
 				sleep 5
-				dpkg -i mysql-apt-config*
+				sudo dpkg -i mysql-apt-config*
 				sudo apt update
 				cd /
 				echo -e $lastcheck
@@ -211,7 +408,7 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
 				chmod -R 777 /var/www/html/configs/
 				echo -e $mysqldf
 				set global sql_mode=""
-				sudo printf '[mysqld]\n sql_mode=' > /etc/mysql/conf.d/webpanel_mysql_disable.cnf
+				echo "sql_mode=\"\"" > /etc/mysql/conf.d/webpanel_mysql_disable.cnf
 				sudo systemctl restart mysql.service
 				sleep 5
 				echo -e $mysqldfs
